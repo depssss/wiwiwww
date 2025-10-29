@@ -1,0 +1,15 @@
+version: "3.8"
+services:
+  aggregator:
+    build: .
+    container_name: aggregator
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dedup_data:/app  # optional, to persist dedup.db if created in /app
+  publisher:
+    image: python:3.11-slim
+    container_name: publisher
+    depends_on:
+      - aggregator
+    command: ["sleep", "infinity"] # manual run or you can run a script for demo
