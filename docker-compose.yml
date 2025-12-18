@@ -1,15 +1,76 @@
-version: "3.8"
+version: '3.8'
+
 services:
+  # SERVICE 1: AGGREGATOR (SERVER UTAMA)
   aggregator:
     build: .
-    container_name: aggregator
+    container_name: uts_aggregator
     ports:
       - "8080:8080"
     volumes:
-      - ./dedup_data:/app  # optional, to persist dedup.db if created in /app
+      # HANYA mount folder data agar file .db tersimpan (Persistence)
+      # Jangan mount ke /app, nanti kodingan hilang!
+      - ./data:/app/data
+    networks:
+      - internal_net
+    restart: always
+
+  # SERVICE 2: PUBLISHER (SIMULATOR PENGIRIM)
   publisher:
-    image: python:3.11-slim
-    container_name: publisher
+    build: .
+    container_name: uts_publisher_sim
     depends_on:
       - aggregator
-    command: ["sleep", "infinity"] # manual run or you can run a script for demo
+    networks:
+      - internal_net
+    environment:
+      - TARGET_URL=http://aggregator:8080/publish
+    # Script ini otomatis jalan untuk simulasi kirim 5000+ event
+    command: >
+      python -c "
+      import asyncio, httpx, uuid, random, datetime
+
+      async def send_events():
+          url = 'http://aggregator:8080/publish'
+          async with httpx.AsyncClient() as client:
+              # Tunggu server nyala dulu
+              await asyncio.sleep(5)
+              print('🚀 Starting Publisher Simulation...')
+              
+              topics = ['user.login', 'order.created', 'payment.success']
+              events_sent = []
+              
+              for i in range(5500):
+                  # 25% kemungkinan kirim ulang event lama (Simulasi Duplikat)
+                  if events_sent and random.random() < 0.25:
+                      event = random.choice(events_sent)
+                      print(f'♻️ Resending DUPLICATE: {event['event_id']}')
+                  else:
+                      # Buat event baru
+                      event = {
+                          'topic': random.choice(topics),
+                          'event_id': str(uuid.uuid4()),
+                          'timestamp': datetime.datetime.now().isoformat(),
+                          'source': 'publisher_sim',
+                          'payload': {'index': i}
+                      }
+                      events_sent.append(event)
+
+                  try:
+                      await client.post(url, json=event)
+                  except:
+                      pass
+                  
+                  # Agar tidak terlalu membebani CPU laptop (opsional delay kecil)
+                  if i % 100 == 0:
+                      await asyncio.sleep(0.1)
+
+              print('✅ DONE: 5500+ events sent.')
+
+      asyncio.run(send_events())
+      "
+
+# Network Internal agar aman (Syarat Bonus)
+networks:
+  internal_net:
+    driver: bridge
