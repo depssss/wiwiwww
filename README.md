@@ -1,7 +1,9 @@
 # UTS Sistem Terdistribusi: Event Aggregator Service
 
 **Nama:** Dewi Purnamasari
+
 **NIM:** 11221087
+
 **Mata Kuliah:** Sistem Terdistribusi
 
 ## 📋 Deskripsi Proyek
